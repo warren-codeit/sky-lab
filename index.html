@@ -2,390 +2,212 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Warren — 개인 포트폴리오</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sky Lab — 하늘과 궤도를 직접 돌려보는 천문 시뮬레이터</title>
+<meta name="description" content="지상에서 본 하늘과 우주에서 본 2체 궤도 역학. 실측 별 데이터와 천문 알고리즘으로 계산하는 브라우저 시뮬레이터." />
 <style>
-  :root {
-    --bg: #0b0f1e;
-    --bg-2: #0c1120;
-    --ink: #f2f2f6;
-    --muted: #9a9aa6;
-    --accent: 236, 40, 120;
-    --purple: 122, 50, 200;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --maxw: 1100px;
+  :root{
+    --bg:#05050b; --ink:#f6f1e8; --muted:#9a9aab; --accent:#ffd27a;
+    --line:rgba(246,241,232,.14); --card:rgba(246,241,232,.035);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue","Apple SD Gothic Neo",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; line-height:1.65;
   }
-  a { color: inherit; }
+  a{color:inherit}
+  .wrap{max-width:920px; margin:0 auto; padding:0 24px}
 
-  /* ---------- nav ---------- */
-  .nav {
-    position: fixed; inset: 0 0 auto 0; z-index: 50;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px clamp(20px, 5vw, 48px);
-    border-bottom: 1px solid transparent;
-    transition: background .3s ease, backdrop-filter .3s ease, border-color .3s ease;
+  /* ---------- 별 배경 ---------- */
+  #stars{position:fixed; inset:0; width:100%; height:100%; z-index:0; display:block}
+  .veil{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:radial-gradient(120% 80% at 50% 0%, rgba(5,5,11,0) 0%, rgba(5,5,11,.55) 60%, rgba(5,5,11,.9) 100%);
   }
-  .nav.scrolled { background: rgba(11, 15, 30, .72); backdrop-filter: blur(10px); border-bottom-color: rgba(255, 255, 255, .08); }
-  .nav__brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.01em; }
-  .nav__mark { width: 16px; height: 16px; border-radius: 4px; background: linear-gradient(135deg, rgb(var(--accent)), #7a32c8); box-shadow: 0 0 14px rgba(var(--accent), .6); }
-  .nav__links { display: flex; gap: clamp(16px, 3vw, 30px); font-family: var(--mono); font-size: .86rem; }
-  .nav__links a { text-decoration: none; color: var(--muted); transition: color .2s ease; }
-  .nav__links a:hover { color: var(--ink); }
-  @media (max-width: 560px) { .nav__links { display: none; } }
+  .page{position:relative; z-index:2}
 
-  /* ---------- hero ---------- */
-  .hero { position: relative; width: 100%; height: 100dvh; min-height: 560px; }
-  .hero canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-  .lower {
-    position: absolute; left: 0; right: 0; bottom: 13%; z-index: 2;
-    display: flex; flex-direction: column; align-items: center; gap: 20px;
-    padding: 0 24px; text-align: center; pointer-events: none;
+  /* ---------- 히어로 ---------- */
+  header.hero{padding-block:clamp(96px,18vh,180px) clamp(56px,10vh,96px)}
+  .kicker{
+    font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 18px;
   }
-  .tag { margin: 0; color: #e9e9f0; font-size: clamp(.95rem, 1.6vw, 1.18rem); text-shadow: 0 2px 20px rgba(0, 0, 0, .85); }
-  .btn {
-    pointer-events: auto; cursor: pointer; text-decoration: none; display: inline-block;
-    font-family: var(--sans); font-size: 1.02rem; font-weight: 600; color: var(--ink);
-    padding: 14px 30px; border-radius: 999px;
-    background: linear-gradient(180deg, rgba(40, 40, 48, .82), rgba(18, 18, 24, .82));
-    border: 1px solid rgba(255, 255, 255, .16);
-    box-shadow: 0 14px 40px -12px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .12);
-    backdrop-filter: blur(6px);
-    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+  h1{
+    margin:0 0 20px; font-size:clamp(40px,8vw,76px); line-height:1.05;
+    letter-spacing:-.03em; font-weight:650;
   }
-  .btn:hover { border-color: rgba(var(--accent), .75); box-shadow: 0 16px 50px -10px rgba(var(--accent), .5), inset 0 1px 0 rgba(255, 255, 255, .2); transform: translateY(-2px); }
-  .btn:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 3px; }
-  .scrollhint {
-    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 2;
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    font-family: var(--mono); font-size: .68rem; letter-spacing: .2em; color: var(--muted);
-    text-decoration: none; animation: bob 2s ease-in-out infinite;
+  h1 em{font-style:normal; color:var(--accent)}
+  .lead{margin:0; max-width:42em; color:var(--muted); font-size:clamp(15px,2.4vw,18px)}
+
+  /* ---------- 두 페이지 ---------- */
+  main{padding-bottom:clamp(64px,12vh,120px)}
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:18px; margin:0 0 56px}
+  @media (max-width:720px){ .grid{grid-template-columns:1fr} }
+  .card{
+    display:block; text-decoration:none; padding:26px 24px 24px; border-radius:14px;
+    border:1px solid var(--line); background:var(--card);
+    transition:border-color .2s ease, background .2s ease, transform .2s ease;
   }
-  .scrollhint svg { width: 16px; height: 16px; }
-  @keyframes bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
+  .card:hover,.card:focus-visible{border-color:rgba(255,210,122,.5); background:rgba(255,210,122,.05); transform:translateY(-2px)}
+  .card__tag{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent)}
+  .card__title{margin:10px 0 8px; font-size:22px; letter-spacing:-.01em}
+  .card__desc{margin:0; color:var(--muted); font-size:14.5px}
+  .card__go{margin:16px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink); opacity:.72}
 
-  /* ---------- sections ---------- */
-  .section { max-width: var(--maxw); margin: 0 auto; padding: clamp(80px, 12vw, 150px) clamp(20px, 5vw, 48px); }
-  .eyebrow { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; color: rgb(var(--accent)); margin: 0 0 18px; }
-  .eyebrow::before { content: ""; width: 26px; height: 1px; background: rgb(var(--accent)); opacity: .7; }
-  .h2 { margin: 0 0 22px; font-size: clamp(1.8rem, 4.5vw, 3rem); font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
-  .lead { margin: 0; max-width: 60ch; color: #c9c9d2; font-size: clamp(1rem, 2vw, 1.18rem); line-height: 1.7; }
-
-  /* about */
-  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
-  .chip { font-family: var(--mono); font-size: .82rem; color: #d4d4dc; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .03); }
-
-  /* stats — reused chrome cards */
-  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px, 2.5vw, 28px); }
-  @media (max-width: 720px) { .stats-grid { grid-template-columns: 1fr; max-width: 380px; margin-inline: auto; } }
-  .metric {
-    position: relative; aspect-ratio: 7 / 6; border-radius: 24px; overflow: hidden;
-    display: grid; place-content: center; gap: .4em;
-    background: radial-gradient(125% 85% at 18% 6%, rgba(255, 255, 255, .09), transparent 42%), linear-gradient(158deg, #161618, #0c0c0e 56%, #08080a);
-    border: 1px solid rgba(255, 255, 255, .07);
-    box-shadow: inset 0 2px 1px rgba(255, 255, 255, .14), inset 0 -4px 7px rgba(0, 0, 0, .7), 0 30px 60px -24px rgba(0, 0, 0, .9);
+  /* ---------- 본문 ---------- */
+  section{margin:0 0 44px}
+  h2{
+    margin:0 0 14px; font-size:13px; font-family:var(--mono); font-weight:500;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--accent);
   }
-  .metric__frame { position: absolute; inset: 18px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; }
-  .metric__dot { position: absolute; left: 27px; bottom: 27px; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 9px 1px rgba(255, 255, 255, .6); }
-  .metric__value { font-weight: 800; font-size: clamp(2.4rem, 6vw, 4rem); line-height: 1; text-align: center; background: linear-gradient(180deg, #fff, #eceef2 15%, #bbbec8 39%, #83858f 50%, #b4b7c1 60%, #f4f5f9 82%, #c9ccd5); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; filter: drop-shadow(0 3px 12px rgba(0, 0, 0, .5)); }
-  .metric__label { text-align: center; color: #e7e7ec; font-weight: 500; font-size: clamp(.9rem, 1.4vw, 1.1rem); }
+  p{margin:0 0 14px; color:var(--muted); font-size:15px; max-width:46em}
+  ul{margin:0; padding-left:1.1em; color:var(--muted); font-size:15px; max-width:46em}
+  li{margin:0 0 8px}
+  code{font-family:var(--mono); font-size:.92em; color:var(--ink)}
+  strong{color:var(--ink); font-weight:600}
 
-  /* work */
-  .work-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: clamp(18px, 2.5vw, 28px); }
-  .card {
-    display: block; text-decoration: none; border-radius: 18px; padding: 14px;
-    background: var(--bg-2); border: 1px solid rgba(255, 255, 255, .08);
-    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+  footer{
+    border-top:1px solid var(--line); padding-block:26px 40px;
+    font-family:var(--mono); font-size:12px; color:var(--muted);
+    display:flex; flex-wrap:wrap; gap:12px 20px; justify-content:space-between;
   }
-  .card:hover { transform: translateY(-4px); border-color: rgba(var(--accent), .55); box-shadow: 0 24px 60px -24px rgba(var(--accent), .4); }
-  .card__thumb { aspect-ratio: 16 / 10; border-radius: 12px; position: relative; overflow: hidden; background: radial-gradient(120% 110% at 28% 120%, rgba(var(--accent), .65), transparent 60%), radial-gradient(110% 100% at 82% -15%, rgba(var(--purple), .5), transparent 58%), #0e1326; }
-  .card__thumb::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(255, 255, 255, .14) 1px, transparent 1.5px); background-size: 7px 7px; opacity: .45; }
-  .card__body { padding: 16px 8px 8px; }
-  .card__tag { font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: rgb(var(--accent)); }
-  .card__title { margin: 8px 0 6px; font-size: 1.18rem; font-weight: 700; letter-spacing: -0.01em; }
-  .card__desc { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.6; }
+  footer a{color:var(--muted); text-decoration:none; border-bottom:1px solid transparent}
+  footer a:hover{color:var(--ink); border-bottom-color:var(--line)}
 
-  /* contact */
-  .contact { text-align: center; }
-  .contact .lead { margin-inline: auto; }
-  .contact__actions { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 36px; }
-  .btn--accent { background: linear-gradient(180deg, rgb(var(--accent)), #b81f62); border-color: rgba(255, 255, 255, .2); }
-  .btn--ghost { background: transparent; border-color: rgba(255, 255, 255, .18); }
-
-  footer { border-top: 1px solid rgba(255, 255, 255, .07); padding: 28px clamp(20px, 5vw, 48px); display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; color: var(--muted); font-size: .82rem; font-family: var(--mono); }
-
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    .scrollhint { animation: none; }
-    .card, .btn { transition: none; }
-  }
+  @media (prefers-reduced-motion:reduce){ .card{transition:none} }
 </style>
 </head>
 <body>
 
-<nav class="nav" id="nav">
-  <a class="nav__brand" href="#top"><span class="nav__mark"></span>Warren</a>
-  <div class="nav__links">
-    <a href="#work">Work</a>
-    <a href="#about">About</a>
-    <a href="#contact">Contact</a>
-  </div>
-</nav>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
 
-<header class="hero" id="top" aria-label="Warren — portfolio hero">
-  <canvas id="hero" aria-hidden="true"></canvas>
-  <div class="lower">
-    <p class="tag">바이브코딩으로 만드는 인터랙티브 웹 · 개인 포트폴리오</p>
-    <a class="btn" href="#work">작업 보기</a>
-  </div>
-  <a class="scrollhint" href="#about" aria-label="아래로 스크롤">
-    <span>SCROLL</span>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-  </a>
-</header>
-
-<main>
-  <!-- ====== ABOUT — 내용 교체 ====== -->
-  <section class="section" id="about">
-    <p class="eyebrow">About</p>
-    <h2 class="h2">코드로 경험을 만듭니다</h2>
-    <p class="lead">
-      프롬프트로 대화하듯 코딩(vibe coding)해서 인터랙티브한 웹·도구·시각효과를 만듭니다.
-      그리고 그 과정을 강의로 풀어, 코딩이 처음인 사람도 자기 아이디어를 직접 화면 위에
-      올릴 수 있게 돕습니다. <em>(여기에 너의 실제 소개로 교체)</em>
-    </p>
-    <div class="chips">
-      <span class="chip">Vibe Coding</span>
-      <span class="chip">React</span>
-      <span class="chip">Next.js</span>
-      <span class="chip">Canvas / WebGL</span>
-      <span class="chip">Figma</span>
-      <span class="chip">AI</span>
+<div class="page">
+  <header class="hero">
+    <div class="wrap">
+      <p class="kicker">Sky Lab</p>
+      <h1>하늘과 궤도를<br /><em>직접 돌려보는</em> 시뮬레이터</h1>
+      <p class="lead">
+        지상에서 올려다본 하늘과 우주에서 내려다본 2체 궤도 역학. 실측 별 데이터와 천문
+        알고리즘으로 계산하고, 브라우저에서 그대로 돌아갑니다. 설치도 로그인도 없습니다.
+      </p>
     </div>
-  </section>
+  </header>
 
-  <!-- ====== STATS — 숫자 교체 ====== -->
-  <section class="section" id="stats" aria-label="지표">
-    <div class="stats-grid">
-      <div class="metric"><div class="metric__frame"></div><span class="metric__dot"></span><div class="metric__value">750k</div><div class="metric__label">Views</div></div>
-      <div class="metric"><div class="metric__frame"></div><span class="metric__dot"></span><div class="metric__value">12k</div><div class="metric__label">Students</div></div>
-      <div class="metric"><div class="metric__frame"></div><span class="metric__dot"></span><div class="metric__value">4.9</div><div class="metric__label">Rating</div></div>
-    </div>
-  </section>
-
-  <!-- ====== WORK — 실제 프로젝트로 교체 ====== -->
-  <section class="section" id="work">
-    <p class="eyebrow">Selected Work</p>
-    <h2 class="h2">작업</h2>
-    <div class="work-grid">
+  <main class="wrap">
+    <div class="grid">
       <a class="card" href="sky.html">
-        <div class="card__thumb"></div>
-        <div class="card__body"><span class="card__tag">3D · WebGL</span><h3 class="card__title">하늘 시뮬레이터</h3><p class="card__desc">위도·경도·날짜를 정하고 태양과 별의 일주 궤적을 재생·역재생. 실측 별 데이터(HYG)와 Meeus 천문 알고리즘.</p></div>
+        <span class="card__tag">지상에서 보기</span>
+        <h3 class="card__title">하늘 시뮬레이터</h3>
+        <p class="card__desc">
+          위도·경도·날짜를 정하고 태양과 별의 일주 궤적을 재생·역재생합니다. 별 8,920개,
+          IAU 별자리 88개, 7행성과 달, Messier 천체까지 실제 위치로 그립니다.
+        </p>
+        <p class="card__go">sky.html →</p>
       </a>
       <a class="card" href="orbits.html">
-        <div class="card__thumb"></div>
-        <div class="card__body"><span class="card__tag">3D · Physics</span><h3 class="card__title">궤도 샌드박스</h3><p class="card__desc">질량·거리·속도를 바꿔 두 천체가 충돌할지 탈출할지 관찰. 심플렉틱 적분과 거주가능영역 판정.</p></div>
+        <span class="card__tag">우주에서 보기</span>
+        <h3 class="card__title">궤도 샌드박스</h3>
+        <p class="card__desc">
+          질량·거리·속도를 바꿔 두 천체가 충돌할지 탈출할지 관찰합니다. 심플렉틱 적분으로
+          궤도를 풀고, 항성 프리셋에서는 거주가능영역과 평형온도를 판정합니다.
+        </p>
+        <p class="card__go">orbits.html →</p>
       </a>
     </div>
-  </section>
 
-  <!-- ====== CONTACT ====== -->
-  <section class="section contact" id="contact">
-    <p class="eyebrow" style="justify-content:center;">Contact</p>
-    <h2 class="h2">같이 만들어요</h2>
-    <p class="lead">프로젝트·강의·협업 문의 환영합니다.</p>
-    <div class="contact__actions">
-      <a class="btn btn--accent" href="https://github.com/warren-codeit" target="_blank" rel="noopener">GitHub</a>
-    </div>
-  </section>
-</main>
+    <section>
+      <h2>계산</h2>
+      <p>
+        화면에 보이는 위치는 그림이 아니라 계산 결과입니다. 태양 위치는 Meeus의
+        <em>Astronomical Algorithms</em>, 행성은 JPL 근사 궤도요소, 달은 Schlyter 저정밀
+        해법을 씁니다. 궤도는 velocity Verlet으로 적분해 에너지가 발산하지 않습니다.
+      </p>
+      <p>
+        검증은 <code>node</code>로 돌아가는 결정적 스크립트가 맡습니다. 하지, 남중고도,
+        달 거리, 케플러 제3법칙, 알파 센타우리 실측 주기 대조까지 통과해야 배포합니다.
+      </p>
+    </section>
 
-<footer>
-  <span>© 2026 Warren</span>
-  <span>Built with vibe coding</span>
-</footer>
+    <section>
+      <h2>데이터 출처</h2>
+      <ul>
+        <li><strong>별</strong> — HYG Database v4.2 (CC BY-SA 4.0), 6.5등급까지 8,920개</li>
+        <li><strong>별자리 선·이름</strong> — d3-celestial (BSD-3-Clause), 88개 한국어 라벨</li>
+        <li><strong>천체 표면</strong> — Solar System Scope (CC BY 4.0), NASA New Horizons·Galileo (Public Domain)</li>
+        <li><strong>거주가능영역</strong> — Kopparapu et al. 2013 보수 경계</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>알려진 한계</h2>
+      <p>
+        행성 위치는 근사 궤도요소(1800–2050, 수 arcmin), 달은 저정밀 해법(약 2 arcmin)이라
+        정밀 성식·엄폐 용도가 아닙니다. 대기 굴절은 보정하지 않아 지평선 근처에서 최대 0.6°
+        어긋납니다. 궤도 샌드박스는 점질량 역학이라 자전과 부피는 시각 표현일 뿐 궤도에 영향을
+        주지 않습니다.
+      </p>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <span>Sky Lab · 빌드 없는 단일 HTML + three.js</span>
+    <a href="https://github.com/warren-codeit/sky-lab" target="_blank" rel="noopener">소스 보기 — GitHub</a>
+  </footer>
+</div>
 
 <script>
-  // nav background on scroll
-  var nav = document.getElementById("nav");
-  function onScroll() { nav.classList.toggle("scrolled", window.scrollY > 40); }
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
+(function () {
+  "use strict";
+  var cv = document.getElementById("stars");
+  var ctx = cv.getContext("2d");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var stars = [], dpr = 1, w = 0, h = 0, raf = 0;
+
+  function seed() {
+    var n = Math.round(Math.min(260, (w * h) / 9000));
+    stars = [];
+    for (var i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 1.1 + .25,
+        a: Math.random() * .55 + .2,
+        tw: Math.random() * .8 + .2,
+        ph: Math.random() * Math.PI * 2
+      });
+    }
+  }
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    w = cv.clientWidth; h = cv.clientHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    seed();
+  }
+  function draw(t) {
+    ctx.clearRect(0, 0, w, h);
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var a = reduce ? s.a : s.a * (.72 + .28 * Math.sin(t / 1400 * s.tw + s.ph));
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#f6f1e8";
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (!reduce) raf = requestAnimationFrame(draw);
+  }
+  window.addEventListener("resize", function () {
+    resize();
+    if (reduce) draw(0);
+  });
+  resize();
+  if (reduce) draw(0); else raf = requestAnimationFrame(draw);
+})();
 </script>
 
-<script>
-  (function () {
-    var canvas = document.getElementById("hero");
-    var ctx = canvas.getContext("2d");
-    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    // ===== knobs =====
-    var WORD = "WARREN";
-    var GLYPHS = "{}</>;=()+*[]$01".split("");
-    var GLYPH_AT = 24;
-    var CELL = 11, LCELL = 6, BAND = 0.30, WL_BASE = 0.42;
-    var REPEL = 175, REPEL_STR = 1.0, SPRING = 0.03, DAMP = 0.9, AUTO_IDLE = 2500;
-    var NAVY = [11, 15, 30], PINK = [232, 40, 120], PINK_HI = [255, 105, 170];
-    // =================
-
-    var dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    var W = 0, H = 0, cols = 0, rows = 0;
-    var letters = [];
-    var bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-    var mouse = { x: -9999, y: -9999 };
-    var lastMove = -1e9, autoMode = true, visible = true;
-
-    function ss(e0, e1, x) { var t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }
-
-    function build() {
-      var r = canvas.getBoundingClientRect();
-      W = Math.max(1, Math.floor(r.width)); H = Math.max(1, Math.floor(r.height));
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cols = Math.ceil(W / CELL); rows = Math.ceil(H / CELL);
-
-      var off = document.createElement("canvas");
-      off.width = W; off.height = H;
-      var o = off.getContext("2d");
-      o.fillStyle = "#fff"; o.textAlign = "center"; o.textBaseline = "middle";
-      var size = Math.min(W * 0.16, H * 0.42);
-      o.font = "800 " + size + "px " + getComputedStyle(document.body).fontFamily;
-      while (o.measureText(WORD).width > W * 0.8 && size > 16) {
-        size -= 5; o.font = "800 " + size + "px " + getComputedStyle(document.body).fontFamily;
-      }
-      o.fillText(WORD, W / 2, H * 0.46);
-      var data = o.getImageData(0, 0, W, H).data;
-
-      var lhalf = LCELL / 2, lcols = Math.ceil(W / LCELL), lrows = Math.ceil(H / LCELL);
-      var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-      letters = [];
-      for (var cy = 0; cy < lrows; cy++) {
-        for (var cx = 0; cx < lcols; cx++) {
-          var px = cx * LCELL + lhalf, py = cy * LCELL + lhalf;
-          if (px >= W || py >= H) continue;
-          if (data[((py | 0) * W + (px | 0)) * 4 + 3] > 130) {
-            if (px < minX) minX = px; if (px > maxX) maxX = px;
-            if (py < minY) minY = py; if (py > maxY) maxY = py;
-            letters.push({
-              hx: px, hy: py, x: px, y: py, vx: 0, vy: 0,
-              seed: Math.random() * 6.28,
-              ch: GLYPHS[letters.length % GLYPHS.length],
-              gsize: LCELL * (1.7 + Math.random() * 0.7)
-            });
-          }
-        }
-      }
-      bounds = { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
-    }
-
-    function pinkStr(m) {
-      var cr = (PINK[0] + (PINK_HI[0] - PINK[0]) * m) | 0;
-      var cg = (PINK[1] + (PINK_HI[1] - PINK[1]) * m) | 0;
-      var cb = (PINK[2] + (PINK_HI[2] - PINK[2]) * m) | 0;
-      return "rgb(" + cr + "," + cg + "," + cb + ")";
-    }
-
-    function draw(time) {
-      var t = time;
-      ctx.fillStyle = "rgb(" + NAVY[0] + "," + NAVY[1] + "," + NAVY[2] + ")";
-      ctx.fillRect(0, 0, W, H);
-
-      var half = CELL / 2, maxR = half * 1.34;
-      for (var c = 0; c < cols; c++) {
-        var nx = (c + 0.5) / cols;
-        var level = WL_BASE
-          + 0.12 * Math.sin(nx * 6.0 + t * 0.0008)
-          + 0.06 * Math.sin(nx * 11.0 - t * 0.0011 + 1.3)
-          + 0.06 * Math.sin(t * 0.0005);
-        for (var ri = 0; ri < rows; ri++) {
-          var ny = (ri + 0.5) / rows;
-          var ripple = 0.06 * Math.sin(ny * 9.0 - t * 0.0013 + nx * 3.0);
-          var base = ss(-BAND, BAND, ny - level + ripple);
-          var gx = nx - 0.5, gy = ny - 0.62;
-          var glow = Math.max(0, 1 - Math.sqrt(gx * gx + gy * gy) / 0.72);
-          base = Math.min(1, base + glow * 0.16);
-          if (base < 0.05) continue;
-          var wave = 0.5
-            + 0.30 * Math.sin(nx * 4.5 - t * 0.0020)
-            + 0.30 * Math.sin(ny * 3.2 - t * 0.0016 + 1.1);
-          var v = Math.min(1, base * (0.5 + 0.95 * wave));
-          if (v < 0.06) continue;
-          var rad = v * maxR; if (rad < 0.4) continue;
-          var m = Math.min(1, v * 0.5 + glow * 0.6);
-          ctx.fillStyle = pinkStr(m);
-          ctx.beginPath();
-          ctx.arc(c * CELL + half, ri * CELL + half, rad, 0, 6.2832);
-          ctx.fill();
-        }
-      }
-
-      var lr = LCELL * 0.52;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      for (var i = 0; i < letters.length; i++) {
-        var p = letters[i];
-        var hx = p.hx + Math.sin(t * 0.0008 + p.seed) * 1.0;
-        var hy = p.hy + Math.cos(t * 0.0007 + p.seed) * 1.0;
-        var dx = p.x - mouse.x, dy = p.y - mouse.y, d2 = dx * dx + dy * dy;
-        if (d2 < REPEL * REPEL && d2 > 0.01) {
-          var d = Math.sqrt(d2), f = (REPEL - d) / REPEL;
-          p.vx += (dx / d) * f * REPEL_STR * 6;
-          p.vy += (dy / d) * f * REPEL_STR * 6;
-        }
-        p.vx += (hx - p.x) * SPRING; p.vy += (hy - p.y) * SPRING;
-        p.vx *= DAMP; p.vy *= DAMP; p.x += p.vx; p.y += p.vy;
-
-        var ox = p.x - hx, oy = p.y - hy, disp = Math.sqrt(ox * ox + oy * oy);
-        var mix = disp > GLYPH_AT ? 1 : disp / GLYPH_AT;
-        if (mix < 0.999) {
-          ctx.fillStyle = "rgba(255,255,255," + (0.96 * (1 - mix)) + ")";
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, lr, 0, 6.2832);
-          ctx.fill();
-        }
-        if (mix > 0.04) {
-          ctx.font = "600 " + p.gsize + "px ui-monospace, Menlo, monospace";
-          ctx.fillStyle = "rgba(255,236,247," + (0.95 * mix) + ")";
-          ctx.fillText(p.ch, p.x, p.y);
-        }
-      }
-    }
-
-    function loop(t) {
-      if (!visible) { requestAnimationFrame(loop); return; } // 히어로 안 보이면 그리기 스킵
-      if (t - lastMove > AUTO_IDLE) autoMode = true;
-      if (autoMode) {
-        var u = Math.sin(t * 0.00045) * 0.5 + 0.5;
-        mouse.x = bounds.minX - 36 + u * (bounds.maxX - bounds.minX + 72);
-        mouse.y = (bounds.minY + bounds.maxY) / 2 + Math.sin(t * 0.0012) * (bounds.maxY - bounds.minY) * 0.7;
-      }
-      draw(t);
-      requestAnimationFrame(loop);
-    }
-
-    window.addEventListener("pointermove", function (e) {
-      var r = canvas.getBoundingClientRect();
-      mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
-      lastMove = e.timeStamp; autoMode = false;
-    });
-    window.addEventListener("pointerleave", function () { mouse.x = mouse.y = -9999; });
-
-    var rt;
-    window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(build, 180); });
-
-    if (window.IntersectionObserver) {
-      new IntersectionObserver(function (es) { visible = es[0].isIntersecting; }, { threshold: 0 })
-        .observe(document.querySelector(".hero"));
-    }
-
-    build();
-    if (reduce) draw(3000); else requestAnimationFrame(loop);
-  })();
-</script>
 </body>
 </html>
