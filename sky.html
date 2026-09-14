@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>하늘 시뮬레이터 — 지상에서 본 태양과 별</title>
+<style>
+  :root {
+    --bg: #05050b;
+    --ink: #f6f1e8;
+    --muted: #9a9aab;
+    --accent: #ffd27a;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Apple SD Gothic Neo", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  canvas#gl.dragging { cursor: grabbing; }
+
+  .glass {
+    background: rgba(255,255,255,.055);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    backdrop-filter: blur(16px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 22px 54px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.22);
+  }
+
+  nav.top {
+    position: fixed; top: 14px; left: 16px; z-index: 30;
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; border-radius: 14px; font-size: 13px;
+  }
+  nav.top .brand { font-family: var(--mono); letter-spacing: .14em; font-size: 11px; color: var(--muted); }
+  nav.top a { color: var(--muted); text-decoration: none; padding: 3px 9px; border-radius: 8px; }
+  nav.top a.on { color: var(--ink); background: rgba(255,255,255,.1); }
+  nav.top a:hover { color: var(--ink); }
+
+  #readout {
+    position: fixed; top: 14px; right: 16px; z-index: 30;
+    padding: 10px 14px; border-radius: 14px;
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.7;
+    color: var(--muted); min-width: 236px; pointer-events: none;
+  }
+  #readout b { color: var(--ink); font-weight: 600; }
+
+  .skylabel {
+    position: fixed; z-index: 20; transform: translate(-50%, -50%);
+    font-family: var(--mono); font-size: 11px; color: rgba(246,241,232,.85);
+    text-shadow: 0 1px 4px rgba(0,0,0,.8); pointer-events: none; white-space: nowrap;
+  }
+  .skylabel.cardinal { font-size: 13px; letter-spacing: .2em; color: rgba(246,241,232,.6); }
+  .skylabel.star { color: rgba(180,210,255,.9); }
+  .skylabel.const { color: rgba(150,180,240,.62); font-size: 10.5px; letter-spacing: .04em; }
+  .skylabel.planet { color: rgba(255,224,160,.92); font-weight: 600; }
+  .skylabel.messier { color: rgba(170,225,205,.82); font-size: 10px; letter-spacing: .02em; }
+  .skylabel.sel { color: var(--accent); }
+
+  #panel {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    z-index: 30; border-radius: 18px; padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 9px;
+    width: min(860px, calc(100vw - 24px)); font-size: 12.5px;
+  }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row label { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .row .val { font-family: var(--mono); font-size: 11.5px; color: var(--ink); min-width: 66px; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 90px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); border: none; cursor: pointer; }
+  input[type="date"], select {
+    background: rgba(255,255,255,.08); color: var(--ink); border: 1px solid rgba(255,255,255,.16);
+    border-radius: 8px; padding: 4px 8px; font-family: var(--mono); font-size: 11.5px; color-scheme: dark;
+  }
+  button.btn {
+    background: rgba(255,255,255,.08); color: var(--ink); border: 1px solid rgba(255,255,255,.16);
+    border-radius: 9px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; font-family: var(--mono);
+  }
+  button.btn:hover { background: rgba(255,255,255,.16); }
+  button.btn.on { background: rgba(255,210,122,.34); border-color: rgba(255,210,122,.85); color: #ffe6ad; box-shadow: 0 0 12px rgba(255,210,122,.28); }
+  .seg { display: flex; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--muted); border: none; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+  .seg button.on { background: rgba(255,255,255,.14); color: var(--ink); }
+  .toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toggles button.btn { font-family: var(--sans); font-size: 11.5px; padding: 4px 9px; color: #d7d4cc; border-color: rgba(255,255,255,.28); }
+  .toggles button.btn.on { color: #ffe6ad; font-weight: 600; }
+  #modeHint { font-size: 11px; color: var(--muted); }
+
+  footer.credit {
+    position: fixed; left: 16px; bottom: 14px; z-index: 25;
+    font-family: var(--mono); font-size: 10px; color: rgba(154,154,171,.66);
+  }
+  footer.credit a { color: rgba(154,154,171,.9); }
+
+  @media (max-width: 720px) {
+    #readout { display: none; }
+    footer.credit { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<nav class="top glass">
+  <span class="brand">SKY LAB</span>
+  <a class="on" href="sky.html">지상에서 보기</a>
+  <a href="orbits.html">우주에서 보기</a>
+</nav>
+
+<div id="readout" class="glass"></div>
+<div id="labels"></div>
+
+<div id="panel" class="glass">
+  <div class="row">
+    <div class="seg" id="modeSeg">
+      <button id="modeA" class="on">모드 A: 시간 재생</button>
+      <button id="modeB">모드 B: 위치와 날짜 변경</button>
+    </div>
+    <span id="modeHint">위치와 날짜를 고정하고 시간을 재생합니다</span>
+    <span style="flex:1"></span>
+    <label>도시</label>
+    <select id="city">
+      <option value="">직접 설정</option>
+      <option value="37.5665,126.978" selected>서울</option>
+      <option value="1.3521,103.8198">싱가포르 (적도 부근)</option>
+      <option value="64.1466,-21.9426">레이캬비크 (백야)</option>
+      <option value="-33.8688,151.2093">시드니 (남반구)</option>
+      <option value="89.9,0">북극점</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>위도</label><input type="range" id="lat" min="-90" max="90" step="0.1" value="37.5665" /><span class="val" id="latVal"></span>
+    <label>경도</label><input type="range" id="lon" min="-180" max="180" step="0.1" value="126.978" /><span class="val" id="lonVal"></span>
+  </div>
+  <div class="row">
+    <label>날짜</label><input type="date" id="date" />
+    <label>시각</label><input type="range" id="tod" min="0" max="1439" step="1" /><span class="val" id="todVal"></span>
+  </div>
+  <div class="row">
+    <button class="btn" id="dirBtn" title="재생 방향">▶ 정방향</button>
+    <button class="btn" id="playBtn">▶ 재생</button>
+    <label>배속</label>
+    <select id="speed">
+      <option value="1">실시간</option>
+      <option value="60">1분/초</option>
+      <option value="600">10분/초</option>
+      <option value="3600" selected>1시간/초</option>
+      <option value="7200">2시간/초</option>
+      <option value="10800">3시간/초</option>
+      <option value="21600">6시간/초</option>
+      <option value="86400">1일/초</option>
+    </select>
+    <button class="btn" id="nowBtn">지금</button>
+    <span style="flex:1"></span>
+    <div class="toggles">
+      <button class="btn on" id="tglTrail">궤적</button>
+      <button class="btn" id="tglPast">지나간 자취만</button>
+      <button class="btn on" id="tglConst">별자리</button>
+      <button class="btn on" id="tglConstNames">별자리 이름</button>
+      <button class="btn on" id="tglNames">별 이름</button>
+      <button class="btn on" id="tglPlanets">행성·달</button>
+      <button class="btn on" id="tglMessier">심우주(M)</button>
+      <button class="btn" id="tglGrid">고도 그리드</button>
+      <button class="btn" id="tglAlwaysStars">낮에도 별</button>
+    </div>
+  </div>
+</div>
+
+<footer class="credit">
+  Star data: <a href="https://codeberg.org/astronexus/hyg" target="_blank" rel="noopener">HYG Database v4.2</a> (David Nash), CC BY-SA 4.0 · Constellation lines: <a href="https://github.com/ofrohn/d3-celestial" target="_blank" rel="noopener">d3-celestial</a> (O. Frohn), BSD · Ephemeris: Meeus
+</footer>
+
+<script type="module">
+import * as THREE from "./assets/js/three.module.min.js";
+import {
+  DEG, RAD, jdFromMillis, lst, sunEquatorial, planetEquatorial, moonEquatorial, PLANET_KEYS,
+  equatorialToHorizontal, equatorialToScene, equatorialToLocal,
+} from "./assets/js/astro/ephemeris.js";
+import { STAR_COUNT, STARS, NAMED_STARS } from "./assets/js/astro/stars-data.js";
+import { CONSTELLATIONS } from "./assets/js/astro/constellations.js";
+import { MESSIER } from "./assets/js/astro/messier-data.js";
+import { createTimeEngine } from "./assets/js/astro/time-engine.js";
+
+const Q = new URLSearchParams(location.search);
+if (Q.has("selftest")) import("./assets/js/astro/selftest.js");
+
+/* ── 상태 ─────────────────────────────────────────────── */
+const R_SKY = 100;           // 천구 반경 (씬 단위)
+const state = {
+  latRad: 37.5665 * DEG,
+  lonRad: 126.978 * DEG,
+  mode: "A",
+  showTrail: true, pastOnly: false, showNames: true, showConst: true, showConstNames: true, showGrid: false, alwaysStars: false,
+  showPlanets: true, showMessier: true,
+  daysPerSecB: 30,           // 모드 B 재생: 날짜 스윕 속도
+  bFrac: 0,
+};
+const engine = createTimeEngine(Date.now(), { rate: 3600 });
+
+/* ── 렌더러와 씬 ──────────────────────────────────────── */
+const canvas = document.getElementById("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.6));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1200);
+camera.position.set(0, 0.03, 0);
+camera.rotation.order = "YXZ";
+camera.rotation.x = 18 * DEG;   // 살짝 위를 본 채 시작
+camera.rotation.y = 0;          // 북쪽(−Z)
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
+
+/* ── 하늘 돔 (태양 고도에 따른 팔레트) ─────────────────── */
+const skyUniforms = {
+  uZen: { value: new THREE.Color(0x05050b) },
+  uHor: { value: new THREE.Color(0x08080f) },
+  uGlow: { value: new THREE.Color(0x000000) },
+  uGs: { value: 0 },
+  uSunDir: { value: new THREE.Vector3(0, -1, 0) },
+};
+const skyDome = new THREE.Mesh(
+  new THREE.SphereGeometry(600, 48, 24),
+  new THREE.ShaderMaterial({
+    uniforms: skyUniforms,
+    side: THREE.BackSide,
+    depthWrite: false,
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      varying vec3 vDir;
+      uniform vec3 uZen, uHor, uGlow;
+      uniform float uGs;
+      uniform vec3 uSunDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float t = pow(clamp(d.y, 0.0, 1.0), 0.42);
+        vec3 col = mix(uHor, uZen, t);
+        if (d.y < 0.0) col = mix(uHor, uHor * 0.22, clamp(-d.y * 4.0, 0.0, 1.0));
+        float g = pow(max(dot(d, uSunDir), 0.0), 9.0);
+        float gh = pow(max(dot(d, uSunDir), 0.0), 2.5);
+        col += uGlow * (g * 0.9 + gh * 0.25) * uGs;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  })
+);
+skyDome.renderOrder = -2;
+scene.add(skyDome);
+
+// 팔레트 키프레임: [태양고도°, 천정색, 지평색, 글로우색, 글로우강도]
+const SKY_KEYS = [
+  [-90, 0x05050b, 0x08080f, 0x000000, 0.0],
+  [-18, 0x05050b, 0x090a12, 0x000000, 0.0],
+  [-12, 0x060814, 0x0e1226, 0x1a1430, 0.15],
+  [-6,  0x0a0f24, 0x2a3060, 0x9a4a30, 0.45],
+  [-1,  0x16264e, 0x9a6a44, 0xff8c46, 0.85],
+  [4,   0x2a5cae, 0xa8b8d8, 0xffdCa0, 0.55],
+  [15,  0x3c74cc, 0xaac4e6, 0xfff0d0, 0.35],
+  [90,  0x4880d8, 0xb2ccea, 0xfff6e0, 0.3],
+];
+const _ca = new THREE.Color(), _cb = new THREE.Color();
+function lerpKeys(sunAltDeg) {
+  let i = 0;
+  while (i < SKY_KEYS.length - 2 && sunAltDeg > SKY_KEYS[i + 1][0]) i++;
+  const a = SKY_KEYS[i], b = SKY_KEYS[i + 1];
+  const f = Math.min(1, Math.max(0, (sunAltDeg - a[0]) / (b[0] - a[0])));
+  skyUniforms.uZen.value.copy(_ca.setHex(a[1])).lerp(_cb.setHex(b[1]), f);
+  skyUniforms.uHor.value.copy(_ca.setHex(a[2])).lerp(_cb.setHex(b[2]), f);
+  skyUniforms.uGlow.value.copy(_ca.setHex(a[3])).lerp(_cb.setHex(b[3]), f);
+  skyUniforms.uGs.value = a[4] + (b[4] - a[4]) * f;
+}
+
+/* ── 지면과 지평선 ────────────────────────────────────── */
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(560, 72),
+  new THREE.MeshBasicMaterial({ color: 0x07070d })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.6;
+scene.add(ground);
+
+const horizonRing = new THREE.LineLoop(
+  (() => {
+    const pts = [];
+    for (let i = 0; i < 128; i++) {
+      const a = (i / 128) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * R_SKY, 0, Math.sin(a) * R_SKY));
+    }
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  })(),
+  new THREE.LineBasicMaterial({ color: 0x3a3a52, transparent: true, opacity: 0.8 })
+);
+scene.add(horizonRing);
+
+// 고도 그리드 (30°, 60° 원 + 45° 간격 방위 대원)
+const grid = new THREE.Group();
+{
+  const mat = new THREE.LineBasicMaterial({ color: 0x2a2a44, transparent: true, opacity: 0.7 });
+  for (const altDeg of [30, 60]) {
+    const r = R_SKY * Math.cos(altDeg * DEG), y = R_SKY * Math.sin(altDeg * DEG);
+    const pts = [];
+    for (let i = 0; i <= 96; i++) {
+      const a = (i / 96) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
+    }
+    grid.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+  }
+  for (let az = 0; az < 360; az += 45) {
+    const pts = [];
+    for (let i = 0; i <= 48; i++) {
+      const alt = (i / 48) * Math.PI / 2;
+      const c = Math.cos(alt) * R_SKY, y = Math.sin(alt) * R_SKY;
+      pts.push(new THREE.Vector3(Math.sin(az * DEG) * c, y, -Math.cos(az * DEG) * c));
+    }
+    grid.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+  }
+}
+grid.visible = false;
+scene.add(grid);
+
+/* ── 천구 그룹: tilt(위도) > spin(−LST) > 별, 태양 ─────── */
+const tiltGroup = new THREE.Group();
+const spinGroup = new THREE.Group();
+tiltGroup.add(spinGroup);
+scene.add(tiltGroup);
+
+/* 별: Points 한 개, 정점 셰이더에서 등급 → 크기, B−V → 색 */
+function bvColor(bv) {
+  const stops = [
+    [-0.3, 0.67, 0.78, 1.0], [0.0, 0.80, 0.86, 1.0], [0.3, 1.0, 0.98, 0.95],
+    [0.6, 1.0, 0.93, 0.83], [1.0, 1.0, 0.86, 0.65], [1.6, 1.0, 0.76, 0.52],
+  ];
+  let i = 0;
+  while (i < stops.length - 2 && bv > stops[i + 1][0]) i++;
+  const a = stops[i], b = stops[i + 1];
+  const f = Math.min(1, Math.max(0, (bv - a[0]) / (b[0] - a[0])));
+  return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f];
+}
+const starUniforms = {
+  uStarFade: { value: 1 },
+  uPx: { value: (devicePixelRatio || 1) },
+  uSel: { value: -1 },
+};
+{
+  const pos = new Float32Array(STAR_COUNT * 3);
+  const mag = new Float32Array(STAR_COUNT);
+  const col = new Float32Array(STAR_COUNT * 3);
+  const idx = new Float32Array(STAR_COUNT);
+  const v = [0, 0, 0];
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const ra = STARS[i * 4], dec = STARS[i * 4 + 1];
+    equatorialToLocal(ra, dec, R_SKY, v);
+    pos.set(v, i * 3);
+    mag[i] = STARS[i * 4 + 2];
+    col.set(bvColor(STARS[i * 4 + 3]), i * 3);
+    idx[i] = i;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aMag", new THREE.BufferAttribute(mag, 1));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("aIdx", new THREE.BufferAttribute(idx, 1));
+  const starMat = new THREE.ShaderMaterial({
+    uniforms: starUniforms,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    vertexShader: `
+      attribute float aMag;
+      attribute float aIdx;
+      varying vec3 vColor;
+      varying float vAlpha;
+      uniform float uStarFade, uPx, uSel;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        float horizonFade = smoothstep(-2.0, 5.0, wp.y);   // 지평선 아래 페이드 + 저고도 소광
+        float size = uPx * clamp(8.0 * pow(10.0, -0.11 * aMag), 1.5, 14.0);
+        float alpha = clamp(pow(10.0, -0.22 * (aMag - 1.5)), 0.22, 1.0);
+        if (abs(aIdx - uSel) < 0.5) { size = max(size, uPx * 10.0); alpha = 1.0; }
+        gl_PointSize = size;
+        vAlpha = alpha * horizonFade * uStarFade;
+        vColor = color;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        vec2 c = gl_PointCoord - 0.5;
+        float d = length(c) * 2.0;
+        float core = smoothstep(1.0, 0.18, d);
+        gl_FragColor = vec4(vColor, vAlpha * core);
+      }`,
+    vertexColors: true,
+  });
+  const points = new THREE.Points(geo, starMat);
+  points.renderOrder = 1;
+  spinGroup.add(points);
+}
+
+/* ── 별자리 선 (spinGroup에 별과 함께 회전) ─────────────── */
+const constUniforms = { uStarFade: { value: 1 } };
+let constLines = null;
+{
+  const segs = [];
+  const v = [0, 0, 0];
+  for (const c of CONSTELLATIONS) {
+    for (const poly of c.lines) {
+      for (let i = 0; i + 1 < poly.length; i++) {
+        equatorialToLocal(poly[i][0], poly[i][1], R_SKY * 0.992, v); segs.push(v[0], v[1], v[2]);
+        equatorialToLocal(poly[i + 1][0], poly[i + 1][1], R_SKY * 0.992, v); segs.push(v[0], v[1], v[2]);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segs), 3));
+  constLines = new THREE.LineSegments(geo, new THREE.ShaderMaterial({
+    uniforms: constUniforms,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `varying float vy; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vy=wp.y;
+      gl_Position=projectionMatrix*viewMatrix*wp; }`,
+    fragmentShader: `uniform float uStarFade; varying float vy;
+      void main(){ float hf=smoothstep(-3.0,6.0,vy);
+        gl_FragColor=vec4(0.42,0.60,0.92, 0.34*hf*uStarFade); }`,
+  }));
+  constLines.renderOrder = 0;
+  spinGroup.add(constLines);
+}
+
+/* 태양: 원반 + 글로우 스프라이트 */
+function discTexture(inner, outer) {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 128;
+  const g = cv.getContext("2d");
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, inner);
+  grad.addColorStop(0.4, inner);
+  grad.addColorStop(1, outer);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: discTexture("rgba(255,244,214,1)", "rgba(255,244,214,0)"),
+  transparent: true, depthWrite: false,
+}));
+sunSprite.scale.setScalar(5.5);
+sunSprite.renderOrder = 1;
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: discTexture("rgba(255,190,90,0.55)", "rgba(255,190,90,0)"),
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+}));
+sunGlow.scale.setScalar(22);
+sunGlow.renderOrder = 1;
+spinGroup.add(sunSprite, sunGlow);
+
+/* ── 행성 + 달 (spinGroup 안, 매 프레임 위치 갱신) ─────────── */
+const planetsGroup = new THREE.Group();
+spinGroup.add(planetsGroup);
+function bodySprite(colorPrefix, scale, glow) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: discTexture(colorPrefix + "1)", colorPrefix + "0)"),
+    transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending,
+  }));
+  s.scale.setScalar(scale); s.renderOrder = 1;
+  return s;
+}
+// 색·상대 크기 (naked-eye 인상). color는 "rgba(r,g,b," 접두 — discTexture가 alpha만 붙임
+const PLANET_STYLE = {
+  mercury: { ko: "수성", color: "rgba(200,190,170,", size: 2.2 },
+  venus:   { ko: "금성", color: "rgba(255,240,210,", size: 3.6 },
+  mars:    { ko: "화성", color: "rgba(255,150,110,", size: 2.6 },
+  jupiter: { ko: "목성", color: "rgba(255,225,180,", size: 3.3 },
+  saturn:  { ko: "토성", color: "rgba(240,220,160,", size: 3.0 },
+  uranus:  { ko: "천왕성", color: "rgba(170,220,230,", size: 2.0 },
+  neptune: { ko: "해왕성", color: "rgba(140,170,255,", size: 2.0 },
+};
+const planetObjs = PLANET_KEYS.map((key) => {
+  const st = PLANET_STYLE[key];
+  const spr = bodySprite(st.color, st.size, false);
+  planetsGroup.add(spr);
+  return { key, ko: st.ko, spr, ra: 0, dec: 0 };
+});
+// 달: 원반 + 은은한 글로우
+const moonSprite = bodySprite("rgba(236,238,245,", 3.8, false);
+const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: discTexture("rgba(210,220,240,0.4)", "rgba(210,220,240,0)"),
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+}));
+moonGlow.scale.setScalar(9); moonGlow.renderOrder = 1;
+planetsGroup.add(moonGlow, moonSprite);
+const moonObj = { ko: "달", spr: moonSprite, glow: moonGlow, ra: 0, dec: 0 };
+
+/* ── Messier 심우주 천체 (spinGroup 안, 고정 위치) ────────── */
+const messierGroup = new THREE.Group();
+spinGroup.add(messierGroup);
+const MESSIER_TINT = {
+  galaxy: "rgba(210,220,255,", nebula: "rgba(255,168,190,", planetary: "rgba(150,232,210,",
+  globular: "rgba(255,224,168,", open: "rgba(190,215,255,",
+};
+const messierObjs = MESSIER.map((m) => {
+  const ra = m.raH * 15 * DEG, dec = m.decDeg * DEG;
+  const tint = MESSIER_TINT[m.type] || "rgba(220,220,220,";
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: discTexture(tint + "0.85)", tint + "0)"),
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  const v = [0, 0, 0];
+  equatorialToLocal(ra, dec, R_SKY * 0.99, v);
+  spr.position.set(v[0], v[1], v[2]);
+  spr.scale.setScalar(Math.max(1.8, 4.4 - 0.34 * m.mag));   // 밝을수록 큼
+  spr.renderOrder = 1;
+  messierGroup.add(spr);
+  return { ...m, ra, dec, spr };
+});
+
+/* ── 궤적 (해석적: simTime ±12h 폴리라인, 241 정점) ─────── */
+const TRAIL_N = 241, TRAIL_SPAN = 24 * 3600000;
+const trailsGroup = new THREE.Group();
+scene.add(trailsGroup);
+const trails = [];        // { body, line, times, colorHex }
+let trailCenter = 0;
+
+const TRAIL_PX = Math.min(devicePixelRatio || 1, 1.6);
+function makeTrailLine(colorHex) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(TRAIL_N * 3), 3));
+  geo.setAttribute("aA", new THREE.BufferAttribute(new Float32Array(TRAIL_N), 1));
+  const col = new THREE.Color(colorHex);
+  const line = new THREE.Line(geo, new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: col } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute float aA; varying float vA;
+      void main() { vA = aA; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uColor; varying float vA;
+      void main() { gl_FragColor = vec4(uColor, vA); }`,
+  }));
+  line.renderOrder = 2;
+  const pts = new THREE.Points(geo, new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: col }, uPx: { value: TRAIL_PX } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute float aA; varying float vA; uniform float uPx;
+      void main(){ vA=aA; gl_PointSize=uPx*(2.0+5.0*aA); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader: `uniform vec3 uColor; varying float vA;
+      void main(){ float d=length(gl_PointCoord-0.5)*2.0; float m=smoothstep(1.0,0.0,d);
+        gl_FragColor=vec4(uColor, m*vA); }`,
+  }));
+  pts.renderOrder = 2;
+  return { line, pts };
+}
+
+function addTrail(body, colorHex) {
+  const { line, pts } = makeTrailLine(colorHex);
+  trailsGroup.add(line, pts);
+  trails.push({ body, line, pts, times: new Float64Array(TRAIL_N), colorHex });
+}
+
+function rebuildTrails() {
+  trailCenter = engine.getTime();
+  const v = [0, 0, 0];
+  for (const tr of trails) {
+    const pos = tr.line.geometry.getAttribute("position");
+    const aA = tr.line.geometry.getAttribute("aA");
+    for (let i = 0; i < TRAIL_N; i++) {
+      const t = trailCenter + ((i / (TRAIL_N - 1)) - 0.5) * TRAIL_SPAN;
+      tr.times[i] = t;
+      const jd = jdFromMillis(t);
+      let ra, dec;
+      if (tr.body.type === "sun") { const s = sunEquatorial(jd); ra = s.ra; dec = s.dec; }
+      else { ra = tr.body.ra; dec = tr.body.dec; }
+      equatorialToScene(ra, dec, state.latRad, lst(jd, state.lonRad), R_SKY * 0.985, v);
+      pos.setXYZ(i, v[0], v[1], v[2]);
+      aA.setX(i, 0.28 + 0.85 * Math.min(1, Math.max(0, (v[1] + 3) / 8)));
+    }
+    pos.needsUpdate = true;
+    aA.needsUpdate = true;
+  }
+  updateTrailRange();
+}
+
+function updateTrailRange() {
+  const now = engine.getTime();
+  for (const tr of trails) {
+    if (!state.pastOnly) { tr.line.geometry.setDrawRange(0, TRAIL_N); continue; }
+    let n = 0;
+    while (n < TRAIL_N && tr.times[n] <= now) n++;
+    tr.line.geometry.setDrawRange(0, Math.max(n, 2));
+  }
+}
+
+addTrail({ type: "sun" }, 0xffd27a);
+const STAR_TRAIL_COLORS = [0x8fd0ff, 0xff9fb0, 0xb9ffcf, 0xffe08a];
+
+/* ── 1인칭 카메라 (드래그 시선 + 휠 FOV) ───────────────── */
+let yaw = 0, pitch = 18 * DEG;
+{
+  let dragging = false, px = 0, py = 0, moved = 0;
+  canvas.addEventListener("pointerdown", (e) => {
+    dragging = true; moved = 0; px = e.clientX; py = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - px, dy = e.clientY - py;
+    px = e.clientX; py = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    const k = (camera.fov * DEG) / innerHeight;   // FOV 비례 감도
+    yaw += dx * k;
+    pitch += dy * k;
+    pitch = Math.min(89.5 * DEG, Math.max(-20 * DEG, pitch));
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    dragging = false;
+    canvas.classList.remove("dragging");
+    if (moved < 5) pickStar(e.clientX, e.clientY);
+  });
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    camera.fov = Math.min(120, Math.max(6, camera.fov * Math.exp(e.deltaY * 0.001)));
+    camera.updateProjectionMatrix();
+  }, { passive: false });
+}
+
+/* ── 별 클릭 선택 → 궤적 추가 (화면공간 최근접) ─────────── */
+const _v3 = new THREE.Vector3();
+function starScreenPos(i, lstRad, out) {
+  equatorialToScene(STARS[i * 4], STARS[i * 4 + 1], state.latRad, lstRad, R_SKY, out);
+  _v3.set(out[0], out[1], out[2]).project(camera);
+  return _v3;
+}
+function pickStar(cx, cy) {
+  const lstRad = lst(jdFromMillis(engine.getTime()), state.lonRad);
+  const v = [0, 0, 0];
+  let best = -1, bestD = 28; // px
+  for (let i = 0; i < STAR_COUNT; i++) {
+    if (STARS[i * 4 + 2] > 4.0) break;  // 밝은 순 정렬이라 여기서 끝
+    const p = starScreenPos(i, lstRad, v);
+    if (p.z > 1) continue;
+    const sx = (p.x * 0.5 + 0.5) * innerWidth, sy = (-p.y * 0.5 + 0.5) * innerHeight;
+    const d = Math.hypot(sx - cx, sy - cy);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  if (best < 0) return;
+  const exist = trails.findIndex((t) => t.body.type === "star" && t.body.idx === best);
+  if (exist >= 0) {
+    trailsGroup.remove(trails[exist].line, trails[exist].pts);
+    trails.splice(exist, 1);
+  } else {
+    const starTrails = trails.filter((t) => t.body.type === "star");
+    if (starTrails.length >= 4) {
+      trailsGroup.remove(starTrails[0].line, starTrails[0].pts);
+      trails.splice(trails.indexOf(starTrails[0]), 1);
+    }
+    const named = NAMED_STARS.find((n) => n.idx === best);
+    addTrail(
+      { type: "star", idx: best, ra: STARS[best * 4], dec: STARS[best * 4 + 1], name: named ? named.name : `mag ${STARS[best * 4 + 2].toFixed(1)}` },
+      STAR_TRAIL_COLORS[starTrails.length % 4]
+    );
+  }
+  rebuildTrails();
+  syncSelUniform();
+}
+function syncSelUniform() {
+  const sel = trails.filter((t) => t.body.type === "star");
+  starUniforms.uSel.value = sel.length ? sel[sel.length - 1].body.idx : -1;
+}
+
+/* ── HTML 라벨 (방위 + 별 이름 + 선택 별) ──────────────── */
+const labelsRoot = document.getElementById("labels");
+const cardinalLabels = [
+  { txt: "N", dir: [0, 0, -R_SKY] }, { txt: "E", dir: [R_SKY, 0, 0] },
+  { txt: "S", dir: [0, 0, R_SKY] }, { txt: "W", dir: [-R_SKY, 0, 0] },
+].map((c) => {
+  const el = document.createElement("div");
+  el.className = "skylabel cardinal";
+  el.textContent = c.txt;
+  labelsRoot.appendChild(el);
+  return { ...c, el };
+});
+const starLabels = NAMED_STARS.map((n) => {
+  const el = document.createElement("div");
+  el.className = "skylabel star";
+  el.textContent = n.name;
+  labelsRoot.appendChild(el);
+  return { ...n, el };
+});
+const constLabels = CONSTELLATIONS.map((c) => {
+  const el = document.createElement("div");
+  el.className = "skylabel const";
+  el.textContent = c.ko;
+  labelsRoot.appendChild(el);
+  return { ra: c.labelRa, dec: c.labelDec, el };
+});
+const planetLabels = [...planetObjs, moonObj].map((o) => {
+  const el = document.createElement("div");
+  el.className = "skylabel planet";
+  el.textContent = o.ko;
+  labelsRoot.appendChild(el);
+  return { obj: o, el };
+});
+const messierLabels = messierObjs.map((m) => {
+  const el = document.createElement("div");
+  el.className = "skylabel messier";
+  el.textContent = m.id;
+  labelsRoot.appendChild(el);
+  return { m, el };
+});
+function placeLabel(el, x, y, z, yUp) {
+  _v3.set(x, y, z).project(camera);
+  if (_v3.z > 1 || _v3.x < -1.05 || _v3.x > 1.05 || _v3.y < -1.05 || _v3.y > 1.05 || yUp < -1) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "";
+  el.style.left = `${(_v3.x * 0.5 + 0.5) * innerWidth}px`;
+  el.style.top = `${(-_v3.y * 0.5 + 0.5) * innerHeight - 12}px`;
+}
+function updateLabels(lstRad, starFade) {
+  for (const c of cardinalLabels) placeLabel(c.el, c.dir[0], 1.5, c.dir[2] || 0, 1);
+  const v = [0, 0, 0];
+  for (const s of starLabels) {
+    if (!state.showNames || starFade < 0.06) { s.el.style.display = "none"; continue; }
+    equatorialToScene(STARS[s.idx * 4], STARS[s.idx * 4 + 1], state.latRad, lstRad, R_SKY, v);
+    placeLabel(s.el, v[0], v[1], v[2], v[1]);
+  }
+  for (const c of constLabels) {
+    if (!state.showConstNames || starFade < 0.06) { c.el.style.display = "none"; continue; }
+    equatorialToScene(c.ra, c.dec, state.latRad, lstRad, R_SKY * 0.9, v);
+    placeLabel(c.el, v[0], v[1], v[2], v[1]);
+  }
+  for (const pl of planetLabels) {
+    if (!state.showPlanets) { pl.el.style.display = "none"; continue; }
+    equatorialToScene(pl.obj.ra, pl.obj.dec, state.latRad, lstRad, R_SKY, v);
+    placeLabel(pl.el, v[0], v[1], v[2], v[1]);
+  }
+  for (const ml of messierLabels) {
+    if (!state.showMessier || starFade < 0.12) { ml.el.style.display = "none"; continue; }
+    equatorialToScene(ml.m.ra, ml.m.dec, state.latRad, lstRad, R_SKY, v);
+    placeLabel(ml.el, v[0], v[1], v[2], v[1]);
+  }
+}
+
+/* ── UI 배선 ──────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+const els = {
+  lat: $("lat"), lon: $("lon"), latVal: $("latVal"), lonVal: $("lonVal"),
+  date: $("date"), tod: $("tod"), todVal: $("todVal"), city: $("city"),
+  playBtn: $("playBtn"), dirBtn: $("dirBtn"), speed: $("speed"), nowBtn: $("nowBtn"),
+  modeA: $("modeA"), modeB: $("modeB"), modeHint: $("modeHint"), readout: $("readout"),
+};
+const lonOffsetMs = () => (state.lonRad * RAD / 15) * 3600000;   // LMT = UTC + λ/15h
+const pad = (n) => String(n).padStart(2, "0");
+
+function lmtParts(ms) {
+  const d = new Date(ms + lonOffsetMs());
+  return {
+    date: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`,
+    minutes: d.getUTCHours() * 60 + d.getUTCMinutes(),
+    hm: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
+  };
+}
+function syncInputsFromTime() {
+  const p = lmtParts(engine.getTime());
+  if (!todDragging) { els.tod.value = p.minutes; }
+  els.todVal.textContent = p.hm + " LMT";
+  if (document.activeElement !== els.date) els.date.value = p.date;
+}
+function setTimeFromInputs() {
+  const [y, m, d] = els.date.value.split("-").map(Number);
+  if (!y) return;
+  const min = Number(els.tod.value);
+  engine.setTime(Date.UTC(y, m - 1, d, 0, Math.round(min)) - lonOffsetMs());
+  rebuildTrails();
+}
+let todDragging = false;
+els.tod.addEventListener("pointerdown", () => (todDragging = true));
+addEventListener("pointerup", () => (todDragging = false));
+els.tod.addEventListener("input", setTimeFromInputs);
+els.date.addEventListener("change", setTimeFromInputs);
+
+function syncLatLon() {
+  state.latRad = Number(els.lat.value) * DEG;
+  state.lonRad = Number(els.lon.value) * DEG;
+  els.latVal.textContent = `${Number(els.lat.value).toFixed(1)}°`;
+  els.lonVal.textContent = `${Number(els.lon.value).toFixed(1)}°`;
+  rebuildTrails();
+}
+els.lat.addEventListener("input", () => { els.city.value = ""; syncLatLon(); });
+els.lon.addEventListener("input", () => { els.city.value = ""; syncLatLon(); });
+els.city.addEventListener("change", () => {
+  if (!els.city.value) return;
+  const [la, lo] = els.city.value.split(",").map(Number);
+  els.lat.value = la; els.lon.value = lo;
+  syncLatLon();
+});
+
+function syncPlayUI() {
+  els.playBtn.textContent = engine.isPlaying() ? "⏸ 정지" : "▶ 재생";
+  els.dirBtn.textContent = engine.getDirection() > 0 ? "▶ 정방향" : "◀ 역방향";
+}
+els.playBtn.addEventListener("click", () => { engine.toggle(); syncPlayUI(); });
+els.dirBtn.addEventListener("click", () => { engine.setDirection(-engine.getDirection()); syncPlayUI(); });
+els.speed.addEventListener("change", () => engine.setRate(Number(els.speed.value)));
+els.nowBtn.addEventListener("click", () => { engine.setTime(Date.now()); rebuildTrails(); });
+
+function setMode(m) {
+  state.mode = m;
+  els.modeA.classList.toggle("on", m === "A");
+  els.modeB.classList.toggle("on", m === "B");
+  els.tod.disabled = m === "B";
+  els.speed.disabled = m === "B";
+  els.modeHint.textContent = m === "A"
+    ? "위치와 날짜를 고정하고 시간을 재생합니다"
+    : "시각을 고정했습니다. 위도, 경도 슬라이더를 움직이거나 재생을 누르면 날짜가 1년 주기로 흐릅니다";
+}
+els.modeA.addEventListener("click", () => setMode("A"));
+els.modeB.addEventListener("click", () => setMode("B"));
+
+function bindToggle(id, key, after) {
+  $(id).addEventListener("click", () => {
+    state[key] = !state[key];
+    $(id).classList.toggle("on", state[key]);
+    if (after) after();
+  });
+}
+bindToggle("tglTrail", "showTrail", () => (trailsGroup.visible = state.showTrail));
+bindToggle("tglPast", "pastOnly", updateTrailRange);
+bindToggle("tglConst", "showConst", () => (constLines.visible = state.showConst));
+bindToggle("tglPlanets", "showPlanets", () => (planetsGroup.visible = state.showPlanets));
+bindToggle("tglMessier", "showMessier", () => (messierGroup.visible = state.showMessier));
+bindToggle("tglConstNames", "showConstNames");
+bindToggle("tglNames", "showNames");
+bindToggle("tglGrid", "showGrid", () => (grid.visible = state.showGrid));
+bindToggle("tglAlwaysStars", "alwaysStars");
+
+/* ── readout ──────────────────────────────────────────── */
+function fmtHMS(rad) {
+  const h = rad * RAD / 15;
+  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  return `${pad(hh)}h${pad(mm)}m`;
+}
+let lastReadout = 0;
+function updateReadout(now, jd, lstRad, sunH) {
+  if (now - lastReadout < 250) return;
+  lastReadout = now;
+  const t = engine.getTime();
+  const u = new Date(t);
+  const p = lmtParts(t);
+  els.readout.innerHTML =
+    `<b>${u.getUTCFullYear()}-${pad(u.getUTCMonth() + 1)}-${pad(u.getUTCDate())} ${pad(u.getUTCHours())}:${pad(u.getUTCMinutes())}</b> UTC · ${p.hm} LMT<br>` +
+    `LST ${fmtHMS(lstRad)} · φ ${(state.latRad * RAD).toFixed(2)}° λ ${(state.lonRad * RAD).toFixed(2)}°<br>` +
+    `태양 고도 <b>${(sunH.alt * RAD).toFixed(1)}°</b> 방위 ${(sunH.az * RAD).toFixed(0)}°` +
+    (trails.length > 1 ? `<br>궤적: 태양 + ${trails.filter((x) => x.body.type === "star").map((x) => x.body.name).join(", ")}` : "");
+}
+
+/* ── URL 파라미터 (공유·테스트용): ?t=ISO&lat=&lon=&yaw=&pitch=&fov= ── */
+if (Q.has("t")) { const ms = Date.parse(Q.get("t")); if (isFinite(ms)) engine.setTime(ms); }
+if (Q.has("lat")) els.lat.value = Q.get("lat");
+if (Q.has("lon")) els.lon.value = Q.get("lon");
+if (Q.has("lat") || Q.has("lon")) els.city.value = "";
+if (Q.has("yaw")) yaw = Number(Q.get("yaw")) * DEG;
+if (Q.has("pitch")) pitch = Number(Q.get("pitch")) * DEG;
+if (Q.has("fov")) { camera.fov = Number(Q.get("fov")); camera.updateProjectionMatrix(); }
+
+/* ── 메인 루프 ────────────────────────────────────────── */
+syncLatLon();
+syncInputsFromTime();
+syncPlayUI();
+rebuildTrails();
+
+let lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(100, now - lastT);
+  lastT = now;
+
+  if (state.mode === "A") {
+    engine.advance(dt);
+  } else if (engine.isPlaying()) {
+    // 모드 B 재생: 시각 고정, 날짜만 하루 단위로 스윕
+    state.bFrac += (dt / 1000) * state.daysPerSecB * engine.getDirection();
+    const whole = Math.trunc(state.bFrac);
+    if (whole !== 0) {
+      state.bFrac -= whole;
+      engine.setTime(engine.getTime() + whole * 86400000);
+      rebuildTrails();
+    }
+  }
+
+  const simMs = engine.getTime();
+  const jd = jdFromMillis(simMs);
+  const lstRad = lst(jd, state.lonRad);
+
+  tiltGroup.rotation.x = state.latRad - Math.PI / 2;
+  spinGroup.rotation.y = -lstRad;
+
+  const sun = sunEquatorial(jd);
+  const sv = [0, 0, 0];
+  equatorialToLocal(sun.ra, sun.dec, R_SKY * 0.95, sv);
+  sunSprite.position.set(sv[0], sv[1], sv[2]);
+  sunGlow.position.set(sv[0], sv[1], sv[2]);
+  const sunH = equatorialToHorizontal(sun.ra, sun.dec, state.latRad, lstRad);
+  const sunAltDeg = sunH.alt * RAD;
+  lerpKeys(sunAltDeg);
+  // 태양 방향 (씬 좌표) → 돔 글로우
+  equatorialToScene(sun.ra, sun.dec, state.latRad, lstRad, 1, sv);
+  skyUniforms.uSunDir.value.set(sv[0], sv[1], sv[2]);
+  const fade = state.alwaysStars ? 1 : 1 - Math.min(1, Math.max(0, (sunAltDeg + 9) / 8));
+  starUniforms.uStarFade.value = fade;
+  constUniforms.uStarFade.value = fade;
+  starUniforms.uPx.value = (devicePixelRatio > 1.6 ? 1.6 : devicePixelRatio || 1) * Math.pow(60 / camera.fov, 0.6);
+
+  // 행성 + 달 위치 갱신 (spinGroup 안이라 위치만 재계산; 일주운동은 그룹 회전이 처리)
+  const pv = [0, 0, 0];
+  for (const p of planetObjs) {
+    const pe = planetEquatorial(jd, p.key);
+    p.ra = pe.ra; p.dec = pe.dec;
+    equatorialToLocal(pe.ra, pe.dec, R_SKY * 0.94, pv);
+    p.spr.position.set(pv[0], pv[1], pv[2]);
+  }
+  const me = moonEquatorial(jd);
+  moonObj.ra = me.ra; moonObj.dec = me.dec;
+  equatorialToLocal(me.ra, me.dec, R_SKY * 0.9, pv);
+  moonSprite.position.set(pv[0], pv[1], pv[2]);
+  moonGlow.position.set(pv[0], pv[1], pv[2]);
+  planetsGroup.visible = state.showPlanets;               // 행성·달은 낮에도 표시 (밝은 천체)
+  messierGroup.visible = state.showMessier && fade > 0.06; // 심우주는 밤에만 (희미)
+
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  if (state.mode === "A" && Math.abs(simMs - trailCenter) > TRAIL_SPAN / 4) rebuildTrails();
+  else if (state.pastOnly) updateTrailRange();
+
+  if (engine.isPlaying() && state.mode === "A") syncInputsFromTime();
+  updateLabels(lstRad, fade);
+  updateReadout(now, jd, lstRad, sunH);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

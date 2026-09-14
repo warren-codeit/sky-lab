@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "astro shared modules — node에서 selftest 헤드리스 실행을 위한 ESM 선언 (브라우저 동작 무관)"
+}
