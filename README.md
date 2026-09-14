@@ -2,6 +2,8 @@
 
 우주에서 본 궤도 역학(`index.html`, 사이트를 열면 바로 나오는 화면)과 지상에서 본 하늘(`sky.html`) 두 페이지. 빌드 없는 단일 HTML + 공유 ES 모듈 구조.
 
+**제작 시간 90분** · 배포 https://sky-lab-iota.vercel.app
+
 ## 실행
 
 ES 모듈은 `file://`에서 CORS로 막히므로 로컬 서버 필요:
