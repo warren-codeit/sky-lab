@@ -1,6 +1,6 @@
 # Sky Lab — 천문 시뮬레이션 웹사이트
 
-지상에서 본 하늘(`sky.html`)과 우주에서 본 궤도 역학(`orbits.html`) 두 페이지. 빌드 없는 단일 HTML + 공유 ES 모듈 구조 (poems.html 패턴).
+우주에서 본 궤도 역학(`index.html`, 사이트를 열면 바로 나오는 화면)과 지상에서 본 하늘(`sky.html`) 두 페이지. 빌드 없는 단일 HTML + 공유 ES 모듈 구조.
 
 ## 실행
 
@@ -10,9 +10,8 @@ ES 모듈은 `file://`에서 CORS로 막히므로 로컬 서버 필요:
 git clone https://github.com/warren-codeit/sky-lab.git
 cd sky-lab
 python3 -m http.server 8000
-# http://localhost:8000/           (허브 — 두 페이지로 링크)
-# http://localhost:8000/sky.html
-# http://localhost:8000/orbits.html
+# http://localhost:8000/           궤도 샌드박스 (메인)
+# http://localhost:8000/sky.html   하늘 시뮬레이터
 ```
 
 ## 두 페이지
@@ -28,7 +27,7 @@ python3 -m http.server 8000
 - 하늘색은 태양 고도에 따라 밤↔박명↔낮으로 변하고, 별·별자리는 낮에 페이드("낮에도 별" 토글로 상시 표시).
 - URL 파라미터: `?lat=&lon=&t=<ISO>&yaw=&pitch=&fov=&selftest=1`
 
-### orbits.html — 우주에서 보기
+### index.html — 우주에서 보기 (메인 화면)
 - 두 천체의 상호 중력을 velocity Verlet(심플렉틱)로 적분. 질량은 실시간, 거리·속도는 "다시 발사" 방식(드래그 중 예상 궤도 프리뷰).
 - 초기 속도는 원궤도 속도 배수 f (1.0=원, 1.41=탈출). 접선 발사 시 e=|f²−1|.
 - **실사 텍스처**: 각 천체에 실측 사진 지도(지구 대륙·목성 띠·달/명왕성/이오 표면). 항성·가상 천체는 태양/목성 지도를 색조 변경해 재사용. 자전이 표면을 실제로 돌림.
@@ -41,8 +40,8 @@ python3 -m http.server 8000
 ## 파일 구조
 
 ```
-index.html                     # 허브 (두 페이지로 링크)
-sky.html, orbits.html          # 두 페이지 (인라인 CSS/JS)
+index.html                     # 궤도 샌드박스 — 사이트 진입 화면 (인라인 CSS/JS)
+sky.html                       # 하늘 시뮬레이터 (인라인 CSS/JS)
 assets/js/astro/
   ephemeris.js                 # JD·GMST/LST·태양·행성(JPL)·달(Schlyter)·좌표변환 (순수 함수)
   stars-data.js                # HYG v4.2에서 구운 별 8920개 (mag≤6.5, 생성물, 직접 수정 금지)
